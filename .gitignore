@@ -1,3 +1,6 @@
+# Personal config
+.projections.json
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
