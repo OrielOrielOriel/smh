@@ -40,7 +40,15 @@ func Execute() {
 
 func init() {
 	//cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.smh.yaml)")
+	rootCmd.PersistentFlags().DurationP("delay", "d", 0, "Time waited between requests, global across all jobs. Threads wait for each other. (e.g. 1500ms")
+	rootCmd.PersistentFlags().Bool("no-error", false, "Don't display errors.")
+	rootCmd.PersistentFlags().Bool("no-progress", false, "Don't display progress.")
+	rootCmd.PersistentFlags().Bool("no-status", false, "Don't display rolling request status.")
+	rootCmd.PersistentFlags().StringP("output", "o", "", "Output file to write results to (defaults to stdout), affected by verbosity settings.")
+	rootCmd.PersistentFlags().Bool("quiet", false, "Don't print the banner and other noise.")
+	rootCmd.PersistentFlags().IntP("threads", "t", 10, "Number of concurrent threads.")
+	rootCmd.PersistentFlags().CountP("verbose", "v", 0, "Verbosity level. Goes up to _")
+
 }
 
 // initConfig reads in config file and ENV variables if set.
