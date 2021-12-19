@@ -18,13 +18,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"log"
+	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"github.com/orielorieloriel/smh/libsmh"
 )
-
-var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -32,10 +31,49 @@ var rootCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
+var mainContext context.Context
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	cobra.CheckErr(rootCmd.Execute())
+	var cancel context.CancelFunc
+	mainContext, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	defer func() {
+		signal.Stop(signalChan)
+		cancel()
+	}()
+	go func() {
+		select {
+		case <-signalChan:
+			// caught CTRL+C
+			fmt.Println("\n[!] Keyboard interrupt detected, terminating.")
+			cancel()
+		case <-mainContext.Done():
+		}
+	}()
+
+	if err := rootCmd.Execute(); err != nil {
+		// Leaving this in results in the same error appearing twice
+		// Once before and once after the help output. Not sure if
+		// this is going to be needed to output other errors that
+		// aren't automatically outputted.
+		// fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+// This has to be called as part of the pre-run for sub commands. Including
+// this in the init() function results in the built-in `help` command not
+// working as intended. The required flags should only be marked as required
+// on the global flags when one of the non-help commands is used.
+func configureGlobalOptions() {
+	if err := rootCmd.MarkPersistentFlagRequired("wordlist"); err != nil {
+		log.Fatalf("error on marking flag as required: %v", err)
+	}
 }
 
 func init() {
@@ -47,30 +85,30 @@ func init() {
 	rootCmd.PersistentFlags().StringP("output", "o", "", "Output file to write results to (defaults to stdout), affected by verbosity settings.")
 	rootCmd.PersistentFlags().Bool("quiet", false, "Don't print the banner and other noise.")
 	rootCmd.PersistentFlags().IntP("threads", "t", 10, "Number of concurrent threads.")
-	rootCmd.PersistentFlags().CountP("verbose", "v", 0, "Verbosity level. Goes up to _")
+	rootCmd.PersistentFlags().CountP("verbose", "v", "Verbosity level. Goes up to _")
 
 }
 
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		// Search config in home directory with name ".smh" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".smh")
+func initThreads() int {
+	threads, err := rootCmd.Flags().GetInt("threads")
+	
+	if err != nil {
+		fmt.Errorf("invalid value for threads: %w", err)
+		os.Exit(1)
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	if threads <= 0 {
+		fmt.Errorf("threads must be more than 0")
+		os.Exit(1)
 	}
+	
+	return threads
+}
+
+func parseGlobalOptions() (*libsmh.Options, error) {
+	globalopts := libsmh.NewOptions()
+	
+	globalopts.Threads = initThreads()
+
+	return globalopts, nil
 }

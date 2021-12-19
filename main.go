@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/orielorieloriel/smh/cmd"
+import "github.com/orielorieloriel/smh/cli/cmd"
 
 func main() {
 	cmd.Execute()
